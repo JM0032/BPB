@@ -15,14 +15,18 @@ const defaultHttpPorts = ['80', '8080', '2052', '2082', '2086', '2095', '8880'];
 const defaultHttpsPorts = ['443', '8443', '2053', '2083', '2087', '2096'];
 let proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 let dohURL = 'https://cloudflare-dns.com/dns-query';
-let trojanPassword = 'bpb-trojan';
+let trojanPassword = `bpb-trojan`;
 // https://emn178.github.io/online-tools/sha224.html
 // https://www.atatus.com/tools/sha224-to-hash
-let hashPassword = 'b5d0a5f7ff7aac227bc68b55ae713131ffdf605ca0da52cce182d513'
-let panelVersion = '2.5.4';
+let hashPassword = 'b5d0a5f7ff7aac227bc68b55ae713131ffdf605ca0da52cce182d513';
+let panelVersion = '2.5.5';
 
 if (!isValidUUID(userID)) {
-    throw new Error('uuid is not valid');
+    throw new Error('UUID is not valid');
+}
+
+if (!isValidSHA224(hashPassword)) {
+    throw new Error('Hash Password is not valid');
 }
 
 export default {
@@ -635,7 +639,7 @@ async function handleTCPOutBound(
             
         vlessResponseHeader 
             ? vlessRemoteSocketToWS(tcpSocket, webSocket, vlessResponseHeader, null, log) 
-            : trojanRemoteSocketToWS(tcpSocket2, webSocket, null, log);
+            : trojanRemoteSocketToWS(tcpSocket, webSocket, null, log);
     }
   
     const tcpSocket = await connectAndWrite(addressRemote, portRemote);
@@ -964,6 +968,11 @@ function base64ToArrayBuffer(base64Str) {
 function isValidUUID(uuid) {
 	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 	return uuidRegex.test(uuid);
+}
+
+function isValidSHA224(hash) {
+    const sha224Regex = /^[0-9a-f]{56}$/i;
+    return sha224Regex.test(hash);
 }
 
 const WS_READY_STATE_OPEN = 1;
@@ -1626,8 +1635,8 @@ async function renderHomePage (env, hostName, fragConfigs) {
 	<body>
 		<h1>BPB Panel <span style="font-size: smaller;">${panelVersion}</span> 💦</h1>
 		<div class="form-container">
-            <h2>FRAGMENT SETTINGS ⚙️</h2>
-			<form id="configForm">
+            <form id="configForm">
+                <h2>VLESS/TROJAN SETTINGS ⚙️</h2>
 				<div class="form-control">
 					<label for="remoteDNS">🌏 Remote DNS</label>
 					<input type="url" id="remoteDNS" name="remoteDNS" value="${remoteDNS}" required>
@@ -1637,7 +1646,54 @@ async function renderHomePage (env, hostName, fragConfigs) {
 					<input type="text" id="localDNS" name="localDNS" value="${localDNS}"
 						pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|localhost$"
 						title="Please enter a valid DNS IP Address or localhost!"  required>
-				</div>	
+				</div>
+				<div class="form-control">
+					<label for="proxyIP">📍 Proxy IP</label>
+					<input type="text" id="proxyIP" name="proxyIP" value="${proxyIP}">
+				</div>
+				<div class="form-control">
+					<label for="cleanIPs">✨ Clean IPs</label>
+					<input type="text" id="cleanIPs" name="cleanIPs" value="${cleanIPs.replaceAll(",", " , ")}">
+				</div>
+                <div class="form-control">
+                    <label>🔎 Online Scanner</label>
+                    <a href="https://scanner.github1.cloud/" id="scanner" name="scanner" target="_blank">
+                        <button type="button" class="button">
+                            Scan now
+                            <span class="material-symbols-outlined" style="margin-left: 5px;">open_in_new</span>
+                        </button>
+                    </a>
+                </div>
+                <div class="form-control" style="padding-top: 10px;">
+					<label>⚙️ Protocols</label>
+					<div style="display: grid; grid-template-columns: 1fr 1fr; align-items: baseline; margin-top: 10px;">
+                        <div style = "display: flex; justify-content: center; align-items: center;">
+                            <input type="checkbox" id="vlessConfigs" name="vlessConfigs" onchange="handleProtocolChange(event)" style="margin: 0; grid-column: 2;" value="true" ${vlessConfigs ? 'checked' : ''}>
+                            <label for="vlessConfigs" style="margin: 0 5px; font-weight: normal; font-size: unset;">VLESS</label>
+                        </div>
+                        <div style = "display: flex; justify-content: center; align-items: center;">
+                            <input type="checkbox" id="trojanConfigs" name="trojanConfigs" onchange="handleProtocolChange(event)" style="margin: 0; grid-column: 2;" value="true" ${trojanConfigs ? 'checked' : ''}>
+                            <label for="trojanConfigs" style="margin: 0 5px; font-weight: normal; font-size: unset;">Trojan</label>
+                        </div>
+					</div>
+				</div>
+                <div class="table-container">
+                    <table id="frag-sub-table">
+                        <tr>
+                            <th style="text-wrap: nowrap; background-color: gray;">Config type</th>
+                            <th style="text-wrap: nowrap; background-color: gray;">Ports</th>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; font-size: larger;"><b>TLS</b></td>
+                            <td style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;">${(await buildPortsBlock()).httpsPortsBlock}</td>    
+                        </tr>
+                        ${hostName.includes('pages.dev') ? '' : `<tr>
+                            <td style="text-align: center; font-size: larger;"><b>Non TLS</b></td>
+                            <td style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;">${(await buildPortsBlock()).httpPortsBlock}</td>    
+                        </tr>`}        
+                    </table>
+                </div>
+                <h2>FRAGMENT SETTINGS ⚙️</h2>	
 				<div class="form-control">
 					<label for="fragmentLengthMin">📐 Length</label>
 					<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline;">
@@ -1697,53 +1753,6 @@ async function renderHomePage (env, hostName, fragConfigs) {
                     <div class="routing">
 						<input type="checkbox" id="block-udp-443" name="block-udp-443" style="margin: 0; grid-column: 2;" value="true" ${blockUDP443 ? 'checked' : ''}>
                         <label for="block-udp-443">Block QUIC</label>
-					</div>
-				</div>
-                <h2>PROXY IP ⚙️</h2>
-				<div class="form-control">
-					<label for="proxyIP">📍 IP or Domain</label>
-					<input type="text" id="proxyIP" name="proxyIP" value="${proxyIP}">
-				</div>
-                <h2>CLEAN IP ⚙️</h2>
-				<div class="form-control">
-					<label for="cleanIPs">✨ Clean IPs</label>
-					<input type="text" id="cleanIPs" name="cleanIPs" value="${cleanIPs.replaceAll(",", " , ")}">
-				</div>
-                <div class="form-control">
-                    <label>🔎 Online Scanner</label>
-                    <a href="https://scanner.github1.cloud/" id="scanner" name="scanner" target="_blank">
-                        <button type="button" class="button">
-                            Scan now
-                            <span class="material-symbols-outlined" style="margin-left: 5px;">open_in_new</span>
-                        </button>
-                    </a>
-                </div>
-                <h2>PORTS ⚙️</h2>
-                <div class="table-container">
-                    <table id="frag-sub-table">
-                        <tr>
-                            <th style="text-wrap: nowrap; background-color: gray;">Config type</th>
-                            <th style="text-wrap: nowrap; background-color: gray;">Ports</th>
-                        </tr>
-                        <tr>
-                            <td style="text-align: center; font-size: larger;"><b>TLS</b></td>
-                            <td style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;">${(await buildPortsBlock()).httpsPortsBlock}</td>    
-                        </tr>
-                        ${hostName.includes('pages.dev') ? '' : `<tr>
-                            <td style="text-align: center; font-size: larger;"><b>Non TLS</b></td>
-                            <td style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;">${(await buildPortsBlock()).httpPortsBlock}</td>    
-                        </tr>`}        
-                    </table>
-                </div>
-                <h2>CONFIG TYPES ⚙️</h2>
-				<div class="form-control" style="margin-bottom: 20px;">			
-                    <div class="routing">
-                        <input type="checkbox" id="vlessConfigs" name="vlessConfigs" onchange="handleProtocolChange(event)" style="margin: 0; grid-column: 2;" value="true" ${vlessConfigs ? 'checked' : ''}>
-                        <label for="vlessConfigs">VLESS</label>
-                    </div>
-                    <div class="routing">
-						<input type="checkbox" id="trojanConfigs" name="trojanConfigs" onchange="handleProtocolChange(event)" style="margin: 0; grid-column: 2;" value="true" ${trojanConfigs ? 'checked' : ''}>
-                        <label for="trojanConfigs">Trojan</label>
 					</div>
 				</div>
                 <h2>WARP SETTINGS ⚙️</h2>
@@ -1825,7 +1834,7 @@ async function renderHomePage (env, hostName, fragConfigs) {
 				</div>
 			</form>
             <hr>            
-			<h2>NORMAL CONFIGS SUB 🔗</h2>
+			<h2>NORMAL SUB 🔗</h2>
 			<div class="table-container">
 				<table id="normal-configs-table">
 					<tr>
@@ -2939,12 +2948,7 @@ async function buildXrayDNSObject (remoteDNS, localDNS, blockAds, bypassIran, by
             "domain:googleapis.cn": ["googleapis.com"]
         },
         servers: [
-            remoteDNS,
-            {
-                address: localDNS,
-                domains: [],
-                port: 53,
-            },
+            remoteDNS
         ],
         tag: "dns",
     };
@@ -2981,11 +2985,15 @@ async function buildXrayDNSObject (remoteDNS, localDNS, blockAds, bypassIran, by
         dnsObject.hosts["geosite:category-porn"] = ["127.0.0.1"];
     }
 
-    if (!(bypassIran || bypassChina) || localDNS === 'localhost' || isWorkerLess) {
-        dnsObject.servers.pop();
-    } else {
-        bypassIran && dnsObject.servers[2].domains.push("geosite:category-ir"); 
-        bypassChina && dnsObject.servers[2].domains.push("geosite:cn");         
+    if (!isWorkerLess && localDNS !== 'localhost' && (bypassIran || bypassChina)) {
+        let localDNSServer = {
+            address: localDNS,
+            domains: [],
+            port: 53,
+        };
+        bypassIran && localDNSServer.domains.push("geosite:category-ir"); 
+        bypassChina && localDNSServer.domains.push("geosite:cn");
+        dnsObject.servers.push(localDNSServer);
     }
 
     return dnsObject;
@@ -3327,7 +3335,7 @@ async function buildWorkerLessConfig(env, client) {
     fakeOutbound.streamSettings.wsSettings.path = '/';
 
     let fragConfig = structuredClone(xrayConfigTemp);
-    fragConfig.remarks  = '💦 BPB Frag - WorkerLess ⭐'
+    fragConfig.remarks  = '💦 BPB F - WorkerLess ⭐'
     fragConfig.dns = await buildXrayDNSObject('https://cloudflare-dns.com/dns-query', localDNS, blockAds, bypassIran, bypassChina, blockPorn, true);
     fragConfig.outbounds[0].settings.domainStrategy = 'UseIP';
     fragConfig.outbounds[0].settings.fragment.length = `${lengthMin}-${lengthMax}`;
@@ -3530,7 +3538,7 @@ async function getFragmentConfigs(env, hostName, client) {
     }
 
     let bestPing = structuredClone(xrayConfigTemp);
-    bestPing.remarks = '💦 BPB Frag - Best Ping 💥';
+    bestPing.remarks = '💦 BPB F - Best Ping 💥';
     bestPing.dns = await buildXrayDNSObject(remoteDNS, localDNS, blockAds, bypassIran, bypassChina, blockPorn, false);
     bestPing.outbounds[0].settings.fragment.length = `${lengthMin}-${lengthMax}`;
     bestPing.outbounds[0].settings.fragment.interval = `${intervalMin}-${intervalMax}`;
@@ -3552,7 +3560,7 @@ async function getFragmentConfigs(env, hostName, client) {
     }
 
     let bestFragment = structuredClone(xrayConfigTemp);
-    bestFragment.remarks = '💦 BPB Frag - Best Fragment 😎';
+    bestFragment.remarks = '💦 BPB F - Best Fragment 😎';
     bestFragment.dns = await buildXrayDNSObject(remoteDNS, localDNS, blockAds, bypassIran, bypassChina, blockPorn, false);
     bestFragment.outbounds.splice(0,1);
     bestFragValues.forEach( (fragLength, index) => {
@@ -3917,104 +3925,45 @@ async function getClashConfig (env, hostName, isWarp) {
     return config;
 }
 
-function buildSingboxVLESSOutbound (remark, address, port, uuid, host, path) {
-    const tls = defaultHttpsPorts.includes(port) ? true : false;
-    let outbound =  {
-        type: "vless",
-        server: address,
-        server_port: +port,
-        uuid: uuid,
-        domain_strategy: "prefer_ipv6",
-        packet_encoding: "",
-        tls: {
-            alpn: [
-                "http/1.1"
+function buildSingboxDNSRules (blockAds, bypassIran, bypassChina, blockPorn, outboundDomains) {
+    let rules = [
+        {
+            domain: [
+                "www.gstatic.com",
+                ...outboundDomains
             ],
-            enabled: true,
-            insecure: false,
-            server_name: randomUpperCase(host),
-            utls: {
-                enabled: true,
-                fingerprint: "randomized"
-            }
+            server: "dns-direct"
         },
-        transport: {
-            early_data_header_name: "Sec-WebSocket-Protocol",
-            max_early_data: 2560,
-            headers: {
-                Host: host
-            },
-            path: path,
-            type: "ws"
-        },
-        tag: remark
-    };
+        {
+            outbound: "any",
+            server: "dns-direct"
+        }
+    ];
 
-    if (!tls) delete outbound.tls;
-
-    return outbound;
-}
-
-function buildSingboxTrojanOutbound (remark, address, port, password, host, path) {
-    const tls = defaultHttpsPorts.includes(port) ? true : false;
-    let outbound = {
-        password: password,
-        server: address,
-        server_port: +port,
-        tls: {
-            alpn: [
-                "http/1.1"
-            ],
-            enabled: true,
-            insecure: false,
-            server_name: randomUpperCase(host),
-            utls: {
-                enabled: true,
-                fingerprint: "randomized"
-            }
-        },
-        transport: {
-            early_data_header_name: "Sec-WebSocket-Protocol",
-            max_early_data: 2560,
-            headers: {
-                Host: [
-                    host
-                ]
-            },
-            path: path,
-            type: "ws"
-        },
-        type: "trojan",
-        tag: remark
+    let bypassRules = {
+        rule_set: [],
+        server: "dns-direct"
     }
+    
+    bypassIran && bypassRules.rule_set.push("geosite-ir");
+    bypassChina && bypassRules.rule_set.push("geosite-cn");
+    (bypassIran || bypassChina) && rules.push(bypassRules);
 
-    if (!tls) delete outbound.tls;
-
-    return outbound;    
-}
-
-function buildSingboxWarpOutbound (remark, ipv6, privateKey, publicKey, endpoint, reserved, chain) {
-    const ipv6Regex = /\[(.*?)\]/;
-    const portRegex = /[^:]*$/;
-    const endpointServer = endpoint.includes('[') ? endpoint.match(ipv6Regex)[1] : endpoint.split(':')[0];
-    const endpointPort = endpoint.includes('[') ? +endpoint.match(portRegex)[0] : +endpoint.split(':')[1];
-
-    return {
-        local_address: [
-            "172.16.0.2/32",
-            ipv6
+    let blockRules = {
+        disable_cache: true,
+        rule_set: [
+            "geosite-malware",
+            "geosite-phishing",
+            "geosite-cryptominers"
         ],
-        mtu: 1280,
-        peer_public_key: publicKey,
-        private_key: privateKey,
-        reserved: reserved,
-        server: endpointServer,
-        server_port: endpointPort,
-        type: "wireguard",
-        domain_strategy: "prefer_ipv6",
-        detour: chain,
-        tag: remark
+        server: "dns-block"
     };
+
+    blockAds && blockRules.rule_set.push("geosite-category-ads-all");
+    blockPorn && blockRules.rule_set.push("geosite-nsfw");
+    rules.push(blockRules);
+
+    return rules;
 }
 
 function buildSingboxRoutingRules (blockAds, bypassIran, bypassChina, blockPorn, blockUDP443, bypassLAN) {
@@ -4089,11 +4038,27 @@ function buildSingboxRoutingRules (blockAds, bypassIran, bypassChina, blockPorn,
         });
     }
 
-    bypassChina && rules.push({
-        geosite: "cn",
-        geoip: "cn",
-        outbound: "direct"
-    });
+    if (bypassChina) {
+        rules.push({
+            rule_set: ["geosite-cn", "geoip-cn"],
+            outbound: "direct"
+        });
+
+        ruleSet.push({
+            type: "remote",
+            tag: "geosite-cn",
+            format: "binary",
+            url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+            download_detour: "direct"
+        },
+        {
+            type: "remote",
+            tag: "geoip-cn",
+            format: "binary",
+            url: "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+            download_detour: "direct"
+        });
+    }
     
     bypassLAN && rules.push({
         ip_is_private: true,
@@ -4150,6 +4115,100 @@ function buildSingboxRoutingRules (blockAds, bypassIran, bypassChina, blockPorn,
     });
 
     return {rules: rules, rule_set: ruleSet};
+}
+
+function buildSingboxVLESSOutbound (remark, address, port, uuid, host, path) {
+    const tls = defaultHttpsPorts.includes(port) ? true : false;
+    let outbound =  {
+        type: "vless",
+        server: address,
+        server_port: +port,
+        uuid: uuid,
+        domain_strategy: "prefer_ipv6",
+        packet_encoding: "",
+        tls: {
+            alpn: "http/1.1",
+            enabled: true,
+            insecure: false,
+            server_name: randomUpperCase(host),
+            utls: {
+                enabled: true,
+                fingerprint: "randomized"
+            }
+        },
+        transport: {
+            early_data_header_name: "Sec-WebSocket-Protocol",
+            max_early_data: 2560,
+            headers: {
+                Host: host
+            },
+            path: path,
+            type: "ws"
+        },
+        tag: remark
+    };
+
+    if (!tls) delete outbound.tls;
+
+    return outbound;
+}
+
+function buildSingboxTrojanOutbound (remark, address, port, password, host, path) {
+    const tls = defaultHttpsPorts.includes(port) ? true : false;
+    let outbound = {
+        password: password,
+        server: address,
+        server_port: +port,
+        tls: {
+            alpn: "http/1.1",
+            enabled: true,
+            insecure: false,
+            server_name: randomUpperCase(host),
+            utls: {
+                enabled: true,
+                fingerprint: "randomized"
+            }
+        },
+        transport: {
+            early_data_header_name: "Sec-WebSocket-Protocol",
+            max_early_data: 2560,
+            headers: {
+                Host: host
+            },
+            path: path,
+            type: "ws"
+        },
+        type: "trojan",
+        tag: remark
+    }
+
+    if (!tls) delete outbound.tls;
+
+    return outbound;    
+}
+
+function buildSingboxWarpOutbound (remark, ipv6, privateKey, publicKey, endpoint, reserved, chain) {
+    const ipv6Regex = /\[(.*?)\]/;
+    const portRegex = /[^:]*$/;
+    const endpointServer = endpoint.includes('[') ? endpoint.match(ipv6Regex)[1] : endpoint.split(':')[0];
+    const endpointPort = endpoint.includes('[') ? +endpoint.match(portRegex)[0] : +endpoint.split(':')[1];
+
+    return {
+        local_address: [
+            "172.16.0.2/32",
+            ipv6
+        ],
+        mtu: 1280,
+        peer_public_key: publicKey,
+        private_key: privateKey,
+        reserved: reserved,
+        server: endpointServer,
+        server_port: endpointPort,
+        type: "wireguard",
+        domain_strategy: "prefer_ipv6",
+        detour: chain,
+        tag: remark
+    };
 }
 
 async function getSingboxConfig (env, hostName, client, warpType) {
@@ -4241,12 +4300,10 @@ async function getSingboxConfig (env, hostName, client, warpType) {
         });
     }
 
-    config.dns.rules[0].domain = [...config.dns.rules[0].domain, ...new Set(outboundDomains)];
+    config.dns.rules = buildSingboxDNSRules(blockAds, bypassIran, bypassChina, blockPorn, new Set(outboundDomains));
     const {rules, rule_set} = buildSingboxRoutingRules (blockAds, bypassIran, bypassChina, blockPorn, blockUDP443, bypassLAN);
     config.route.rules = rules;
     config.route.rule_set = rule_set;
-    blockAds && config.dns.rules[2].rule_set.push("geosite-category-ads-all");
-    blockPorn && config.dns.rules[2].rule_set.push("geosite-nsfw");
 
     return config;
 }
@@ -4399,36 +4456,14 @@ const singboxConfigTemp = {
                 tag: "dns-block"
             }
         ],
-        rules: [
-            {
-                domain: [
-                    "www.gstatic.com"
-                ],
-                server: "dns-direct"
-            },
-            {
-                outbound: [
-                  "any"
-                ],
-                server: "dns-direct"
-            },
-            {
-                disable_cache: true,
-                rule_set: [
-                    "geosite-malware",
-                    "geosite-phishing",
-                    "geosite-cryptominers"
-                ],
-                server: "dns-block"
-            }
-        ],
+        rules: [],
         independent_cache: true
     },
     inbounds: [
         {
             type: "direct",
             tag: "dns-in",
-            listen: "127.0.0.1",
+            listen: "0.0.0.0",
             listen_port: 6450,
             override_address: "8.8.8.8",
             override_port: 53
@@ -4449,7 +4484,7 @@ const singboxConfigTemp = {
         {
             type: "mixed",
             tag: "mixed-in",
-            listen: "127.0.0.1",
+            listen: "0.0.0.0",
             listen_port: 2080,
             sniff: true,
             sniff_override_destination: true
